@@ -1,0 +1,51 @@
+﻿#include "/Engine/Public/Platform.ush"
+
+// Input: 색칠된 색상개수를 조사할 텍스쳐
+Texture2D<float4> InputTexture;
+
+// Output: 결과값을 저장할 uint변수
+RWBuffer<uint> OutputCounter;
+
+
+float4 TargetColor1;
+float4 TargetColor2;
+uint2 TextureSize;
+
+//한 워크 그룹당 8x8개의 스레드를 생성
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void NumPixelPaintedComputeShader(
+    uint3 DispatchThreadId : SV_DispatchThreadID,
+    uint GroupIndex : SV_GroupIndex 
+)
+{
+    //각 스레드가 처리할 점의 텍스처상에서의 좌표(UV좌표가 아님!)
+    //(워크그룹.x + 스레드.x, 워크그룹.y + 스레드.y)로 계산됨
+    uint2 texelPos = DispatchThreadId.xy;
+
+    //텍스처의 범위를 벗어나는 좌표는 처리하지 않음
+    if (texelPos.x >= TextureSize.x || texelPos.y >= TextureSize.y)
+        return;
+
+    //텍스쳐에서 픽셀의 색상을 읽어옴[색상 범위: 0~1]
+    float4 pixelColor = InputTexture.Load(int3(texelPos, 0));
+
+    
+    
+    //목표 색상과 같다면 결과에 1을 더함(atomic연산으로 Race Condition방지)
+    if(
+        abs(pixelColor.r - TargetColor1.r) < 0.01 &&
+        abs(pixelColor.g - TargetColor1.g) < 0.01 &&
+        abs(pixelColor.b - TargetColor1.b) < 0.01
+    )
+    {
+        InterlockedAdd(OutputCounter[0], 1);
+    }
+    if(
+        abs(pixelColor.r - TargetColor2.r) < 0.01 &&
+        abs(pixelColor.g - TargetColor2.g) < 0.01 &&
+        abs(pixelColor.b - TargetColor2.b) < 0.01
+    )
+    {
+        InterlockedAdd(OutputCounter[1], 1);
+    }
+}
